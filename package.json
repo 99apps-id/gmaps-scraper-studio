@@ -1,0 +1,83 @@
+{
+  "name": "google-maps-scrapper",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "electron/main.cjs",
+  "scripts": {
+    "start": "node index.js",
+    "dashboard": "node server.js",
+    "engine": "ENGINE_MODE=engine node server.js",
+    "test": "node --test test/*.test.js",
+    "gen:license": "node tools/gen-license.js",
+    "gen:icon": "node tools/build-icon.js",
+    "electron": "electron .",
+    "dist:win": "electron-builder --win",
+    "dist:mac": "electron-builder --mac",
+    "dist:linux": "electron-builder --linux",
+    "dist:all": "electron-builder -mwl"
+  },
+  "dependencies": {
+    "exceljs": "^4.4.0"
+  },
+  "devDependencies": {
+    "electron": "^34.0.0",
+    "electron-builder": "^25.0.0"
+  },
+  "build": {
+    "appId": "id.naracitra.gmst-scraper",
+    "productName": "GMST Scraper",
+    "copyright": "Copyright © Naracitra",
+    "directories": {
+      "output": "release"
+    },
+    "electronDist": "node_modules/electron/dist",
+    "files": [
+      "package.json",
+      "server.js",
+      "config.js",
+      "lib/catalog.js",
+      "lib/excel.js",
+      "lib/license.js",
+      "lib/payment.js",
+      "lib/poi.js",
+      "lib/scrape-runner.js",
+      "public/**/*",
+      "electron/main.cjs",
+      "electron/preload.cjs",
+      "electron/integrity-check.cjs",
+      "electron/assets/icon.png",
+      "electron/assets/icon.ico"
+    ],
+    "win": {
+      "icon": "electron/assets/icon.ico",
+      "target": [
+        "nsis"
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "shortcutName": "GMST Scraper"
+    },
+    "mac": {
+      "target": [
+        "dmg",
+        "zip"
+      ],
+      "icon": "electron/assets/icon.png",
+      "category": "public.app-category.business"
+    },
+    "linux": {
+      "target": [
+        "AppImage",
+        "deb"
+      ],
+      "icon": "electron/assets/icon.png",
+      "category": "Office"
+    }
+  },
+  "allowScripts": {
+    "electron@34.5.8": true
+  }
+}

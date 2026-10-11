@@ -1,0 +1,630 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Google Maps Business Intelligence | Direktori Bisnis & Leads Scraper Indonesia</title>
+  
+  <!-- FAVICON RESMI GOOGLE MAPS PIN BRAND -->
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <link rel="alternate icon" href="/favicon.ico">
+  <meta name="theme-color" content="#2563eb">
+  <meta name="description" content="Platform Intelijen Direktori Bisnis Google Maps Indonesia. Scraper mendalam untuk berbagai jenis usaha, kampus, perkantoran, dan ekspor Excel langsung.">
+
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+
+  <!-- CUSTOM TITLEBAR (hanya tampil di aplikasi Electron frameless) -->
+  <div class="titlebar" id="appTitlebar" hidden>
+    <div class="titlebar-drag">
+      <span class="titlebar-dot"></span>
+      <span class="titlebar-text">Google Maps Directory Platform</span>
+      <span class="titlebar-license" id="titlebarLicense"></span>
+    </div>
+    <div class="titlebar-controls">
+      <button class="titlebar-btn" id="winMinimize" title="Minimize" aria-label="Minimize">
+        <svg width="11" height="11" viewBox="0 0 12 12"><line x1="1" y1="6" x2="11" y2="6" stroke="currentColor" stroke-width="1.5"/></svg>
+      </button>
+      <button class="titlebar-btn" id="winMaximize" title="Maximize / Restore" aria-label="Maximize">
+        <svg width="11" height="11" viewBox="0 0 12 12"><rect x="1.5" y="1.5" width="9" height="9" fill="none" stroke="currentColor" stroke-width="1.5"/></svg>
+      </button>
+      <button class="titlebar-btn titlebar-close" id="winClose" title="Close" aria-label="Close">
+        <svg width="11" height="11" viewBox="0 0 12 12"><line x1="2" y1="2" x2="10" y2="10" stroke="currentColor" stroke-width="1.5"/><line x1="10" y1="2" x2="2" y2="10" stroke="currentColor" stroke-width="1.5"/></svg>
+      </button>
+    </div>
+  </div>
+
+  <!-- TOPBAR NAVIGATION -->
+  <header class="navbar">
+    <div class="nav-brand">
+      <!-- Official Google Maps Pin Brand Icon -->
+      <div class="brand-logo-wrap" title="Google Maps Directory Platform">
+        <svg width="30" height="30" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M12 2C7.58 2 4 5.58 4 10C4 15.25 12 22 12 22C12 22 20 15.25 20 10C20 5.58 16.42 2 12 2Z" fill="#EA4335"/>
+          <path d="M12 2C16.42 2 20 5.58 20 10C20 12.87 18.28 16.14 16.22 18.91L12 22V2Z" fill="#FBBC04"/>
+          <path d="M12 22L7.78 18.91C9.07 17.18 10.51 15.11 11.45 13.5L12 22Z" fill="#34A853"/>
+          <path d="M4 10C4 13.5 7.5 18 12 22V14.5C9.51 14.5 7.5 12.49 7.5 10C7.5 8.94 7.87 7.97 8.5 7.2L5.8 4.5C4.68 6 4 7.9 4 10Z" fill="#4285F4"/>
+          <circle cx="12" cy="10" r="3.2" fill="#FFFFFF"/>
+        </svg>
+      </div>
+
+      <div class="brand-info">
+        <h1>Google Maps Directory Platform</h1>
+        <p>Enterprise Business Intelligence & Proximity Engine</p>
+      </div>
+    </div>
+
+    <!-- TAB SWITCHER WITH COLORFUL ICONS -->
+    <nav class="nav-tab-links">
+      <button class="nav-tab-btn active" data-tab="tab-explorer">
+        <span class="tab-icon-wrap" style="background: #eff6ff;">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect x="3" y="3" width="18" height="18" rx="3" stroke="#2563eb" stroke-width="2" fill="#ffffff"/>
+            <path d="M3 9H21" stroke="#2563eb" stroke-width="2"/>
+            <path d="M9 3V21" stroke="#3b82f6" stroke-width="1.8"/>
+            <circle cx="6" cy="6" r="1.3" fill="#ef4444"/>
+            <circle cx="12" cy="14" r="1.6" fill="#10b981"/>
+            <circle cx="17" cy="14" r="1.6" fill="#f59e0b"/>
+            <circle cx="12" cy="18" r="1.6" fill="#3b82f6"/>
+            <circle cx="17" cy="18" r="1.6" fill="#8b5cf6"/>
+          </svg>
+        </span>
+        <span>Data Explorer</span>
+      </button>
+      <button class="nav-tab-btn" data-tab="tab-studio">
+        <span class="tab-icon-wrap" style="background: #fffbeb;">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M13 2L3 14H12L11 22L21 10H12L13 2Z" fill="url(#boltGrad)" stroke="#d97706" stroke-width="1.5" stroke-linejoin="round"/>
+            <defs>
+              <linearGradient id="boltGrad" x1="3" y1="2" x2="21" y2="22" gradientUnits="userSpaceOnUse">
+                <stop stop-color="#fbbf24"/>
+                <stop offset="1" stop-color="#ea580c"/>
+              </linearGradient>
+            </defs>
+          </svg>
+        </span>
+        <span>Scraper Studio</span>
+      </button>
+      <button class="nav-tab-btn" data-tab="tab-analytics">
+        <span class="tab-icon-wrap" style="background: #f0fdf4;">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect x="3.5" y="13" width="3.5" height="8" rx="1" fill="#3b82f6"/>
+            <rect x="9.5" y="8" width="3.5" height="13" rx="1" fill="#10b981"/>
+            <rect x="15.5" y="4" width="3.5" height="17" rx="1" fill="#f59e0b"/>
+            <path d="M3.5 11L9.5 6L15.5 3L20.5 4.5" stroke="#ef4444" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+            <circle cx="20.5" cy="4.5" r="1.5" fill="#ef4444"/>
+          </svg>
+        </span>
+        <span>Analytics</span>
+      </button>
+    </nav>
+
+    <!-- ACTIONS: SETTINGS, LICENSE, RELOAD & EXPORT -->
+    <div class="nav-actions">
+      <div class="dropdown-container">
+        <button class="btn btn-surface btn-sm" id="btnSettingsMenu" title="Pengaturan" aria-haspopup="true" aria-expanded="false">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+          <span>Pengaturan</span>
+        </button>
+        <div class="dropdown-menu" id="settingsMenu" role="menu">
+          <a class="dropdown-item" href="#" id="menuLicense">Lisensi</a>
+          <a class="dropdown-item" href="#" id="menuFaq">FAQ</a>
+          <a class="dropdown-item" href="#" id="menuAbout">Tentang</a>
+          <a class="dropdown-item" href="#" id="menuExit" style="color: var(--accent-rose);">Keluar</a>
+        </div>
+      </div>
+      <button class="license-pill" id="licensePill" title="Status lisensi — klik untuk detail/aktivasi">
+        <span class="license-dot" id="licenseDot"></span>
+        <span id="licensePillText">Memeriksa lisensi…</span>
+      </button>
+      <button class="btn btn-surface btn-sm" id="btnReloadDataset" title="Muat ulang master data">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
+        <span>Refresh</span>
+      </button>
+
+      <div class="dropdown-container">
+        <button class="btn btn-emerald btn-sm" id="btnExportMenu" aria-haspopup="true" aria-expanded="false">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          <span>Unduh Data</span>
+        </button>
+        <div class="dropdown-menu" id="dropdownMenu" role="menu">
+          <div class="dropdown-group-label">Hasil filter saat ini</div>
+          <a class="dropdown-item" href="#" id="menuExportFiltered" style="color: var(--accent-emerald); font-weight: 600;">Hasil filter (.xlsx)</a>
+          <a class="dropdown-item" href="#" id="menuExportFilteredCsv">Hasil filter (.csv)</a>
+          <a class="dropdown-item" href="#" id="menuExportFilteredJson">Hasil filter (.json)</a>
+          <div class="dropdown-group-label">Semua master data</div>
+          <a class="dropdown-item" href="/api/export?format=xlsx" download>Semua (.xlsx)</a>
+          <a class="dropdown-item" href="/api/export?format=csv" download>Semua (.csv) UTF-8 BOM</a>
+          <a class="dropdown-item" href="/api/export?format=json" download>Semua (.json)</a>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <div class="app-container">
+
+    <!-- ========================================== -->
+    <!-- TAB 1: DATA EXPLORER                       -->
+    <!-- ========================================== -->
+    <div class="tab-content active" id="tab-explorer">
+      
+      <!-- KPI STATS ROW -->
+      <section class="kpi-row">
+        <div class="kpi-card">
+          <div class="kpi-header">
+            <span class="kpi-title">Total Direktori Bisnis</span>
+            <span class="kpi-icon" style="color: var(--ink-muted);">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="2" width="16" height="20" rx="2" ry="2"/><line x1="9" y1="22" x2="9" y2="22.01"/><line x1="15" y1="22" x2="15" y2="22.01"/><line x1="9" y1="18" x2="9" y2="18.01"/><line x1="15" y1="18" x2="15" y2="18.01"/><line x1="9" y1="14" x2="9" y2="14.01"/><line x1="15" y1="14" x2="15" y2="14.01"/><line x1="9" y1="10" x2="9" y2="10.01"/><line x1="15" y1="10" x2="15" y2="10.01"/><line x1="9" y1="6" x2="9" y2="6.01"/><line x1="15" y1="6" x2="15" y2="6.01"/></svg>
+            </span>
+          </div>
+          <div class="kpi-number" id="kpiTotal">0</div>
+          <div class="kpi-caption">Listing bisnis unik terverifikasi</div>
+        </div>
+
+        <div class="kpi-card">
+          <div class="kpi-header">
+            <span class="kpi-title">Kontak Telepon Valid</span>
+            <span class="kpi-icon" style="color: var(--accent-emerald);">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+            </span>
+          </div>
+          <div class="kpi-number" id="kpiPhone">0</div>
+          <div class="kpi-caption" id="kpiPhonePct">0% memiliki nomor kontak</div>
+        </div>
+
+        <div class="kpi-card">
+          <div class="kpi-header">
+            <span class="kpi-title">Rata-rata Rating</span>
+            <span class="kpi-icon" style="color: var(--accent-amber);">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+            </span>
+          </div>
+          <div class="kpi-number" id="kpiRating">0.0</div>
+          <div class="kpi-caption">Bintang dari ribuan ulasan Google</div>
+        </div>
+
+        <div class="kpi-card">
+          <div class="kpi-header">
+            <span class="kpi-title">Cakupan Wilayah</span>
+            <span class="kpi-icon" style="color: var(--accent-blue);">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+            </span>
+          </div>
+          <div class="kpi-number" id="kpiCities">0</div>
+          <div class="kpi-caption" id="kpiCitiesList">Area perkotaan dan kabupaten</div>
+        </div>
+      </section>
+
+      <!-- EXPLORER TOOLBAR -->
+      <div class="explorer-toolbar">
+        <div class="toolbar-filters">
+          <div class="search-box-wrap">
+            <span class="search-icon">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            </span>
+            <input type="text" id="filterSearch" class="search-input" placeholder="Cari nama, alamat, telepon (tekan /)...">
+          </div>
+
+          <select id="filterCity" class="select-filter">
+            <option value="">Semua Kota / Wilayah</option>
+          </select>
+
+          <select id="filterCategory" class="select-filter">
+            <option value="">Semua Jenis Usaha</option>
+          </select>
+
+          <label class="checkbox-chip">
+            <input type="checkbox" id="filterPhoneOnly">
+            <span>Ada Nomor Telepon</span>
+          </label>
+
+          <label class="checkbox-chip">
+            <input type="checkbox" id="filterWaOnly">
+            <span style="color: #059669; font-weight: 700;">Nomor WhatsApp (08xx)</span>
+          </label>
+
+          <label class="checkbox-chip">
+            <input type="checkbox" id="filterRatingOnly">
+            <span>Rating 4.5+</span>
+          </label>
+        </div>
+
+        <div style="font-size: 0.8rem; color: var(--ink-muted); display: flex; align-items: center; gap: 0.65rem;">
+          <span>Menampilkan <strong id="filterMatchCount" style="color: var(--ink-primary); font-variant-numeric: tabular-nums;">0</strong> listing</span>
+          <button class="btn btn-emerald btn-sm" id="btnExportFiltered" title="Unduh data hasil pencarian dan filter ke Excel (.xlsx)">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            <span id="btnExportFilteredLabel">Unduh Hasil Pencarian (.xlsx)</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- DATA TABLE -->
+      <div class="table-container">
+        <table class="explorer-table" id="dataTable">
+          <thead>
+            <tr>
+              <th style="width: 45px;">No</th>
+              <th data-sort="name">Nama Usaha</th>
+              <th data-sort="category">Jenis Usaha</th>
+              <th>Nomor Telepon</th>
+              <th data-sort="city">Alamat & Kota</th>
+              <th>Kampus Terdekat</th>
+              <th>Perkantoran Terdekat</th>
+              <th data-sort="rating" style="width: 85px;">Rating</th>
+              <th style="width: 70px;">Aksi</th>
+            </tr>
+          </thead>
+          <tbody id="tableBody">
+            <tr>
+              <td colspan="9" style="text-align: center; padding: 3rem; color: var(--ink-muted);">
+                Memuat data direktori...
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- TABLE PAGINATION -->
+      <div class="table-pagination">
+        <div id="paginationInfo">Menampilkan 0 - 0 dari 0 listing</div>
+        <div style="display: flex; align-items: center; gap: 0.5rem;">
+          <button class="btn btn-surface btn-sm" id="btnPrevPage">Sebelumnya</button>
+          <span id="pageCurrent" style="font-weight: 700; color: var(--ink-primary); padding: 0 0.5rem; font-variant-numeric: tabular-nums;">1</span>
+          <button class="btn btn-surface btn-sm" id="btnNextPage">Berikutnya</button>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ========================================== -->
+    <!-- TAB 2: SCRAPER STUDIO                      -->
+    <!-- ========================================== -->
+    <div class="tab-content" id="tab-studio">
+      <div class="studio-layout">
+
+        <!-- STUDIO CONTROLS -->
+        <div class="studio-card">
+          <div class="studio-card-title">
+            <span>Pencarian Otomatis Direktori</span>
+            <span class="tag tag-emerald" id="scraperStateBadge">Idle</span>
+          </div>
+
+          <form id="studioForm">
+            <!-- SECTORS & CATEGORIES -->
+            <div style="margin-bottom: 1.25rem;">
+              <label class="sector-group-label">1. Pilih Sektor & Kategori Bisnis</label>
+              <div id="sectorContainer" class="sector-list">
+                <!-- Dynamically populated from catalog.js -->
+              </div>
+              <input type="text" id="customKeywordInput" class="search-input" placeholder="Atau ketik kata kunci custom..." style="margin-top: 0.5rem;">
+            </div>
+
+            <!-- REGION & CITIES -->
+            <div style="margin-bottom: 1.25rem;">
+              <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.4rem;">
+                <label class="sector-group-label" style="margin-bottom: 0;">2. Pilih Target Wilayah & Kota</label>
+                <div style="display: flex; gap: 0.4rem;">
+                  <button type="button" class="btn btn-surface btn-sm" id="btnSelectAllCities" style="padding: 0.2rem 0.5rem; font-size: 0.7rem;">Pilih Semua</button>
+                  <button type="button" class="btn btn-surface btn-sm" id="btnResetCities" style="padding: 0.2rem 0.5rem; font-size: 0.7rem;">Reset</button>
+                </div>
+              </div>
+              <div id="clusterContainer" style="display: flex; flex-direction: column; gap: 0.75rem; max-height: 240px; overflow-y: auto; padding: 0.65rem; background: var(--bg-subtle); border: 1px solid var(--border-subtle); border-radius: var(--radius-sm);">
+                <!-- Dynamically populated from catalog.js -->
+              </div>
+              <input type="text" id="customCitiesInput" class="search-input" placeholder="Kota custom tambahan (pisahkan koma)..." style="margin-top: 0.5rem;">
+            </div>
+
+            <!-- DEPTH & PROXIMITY -->
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-bottom: 0.75rem;">
+              <div>
+                <label class="sector-group-label">Kedalaman Pencarian</label>
+                <select id="studioDepthSelect" class="select-filter" style="width: 100%;">
+                  <option value="1">Cepat (~20 listing/zona)</option>
+                  <option value="2" selected>Standar (~40 listing/zona)</option>
+                  <option value="3">Mendalam (~60 listing/zona)</option>
+                  <option value="4">Sangat Mendalam (~80 listing/zona)</option>
+                  <option value="5">Ekstra Dalam (~100 listing/zona + sapuan lanjutan)</option>
+                </select>
+              </div>
+              <div style="display: flex; flex-direction: column; justify-content: flex-end;">
+                <label class="checkbox-chip" style="height: 38px;">
+                  <input type="checkbox" id="studioProximityCheck" checked>
+                  <span>Auto Radius POI</span>
+                </label>
+              </div>
+            </div>
+
+            <div style="margin-bottom: 1rem;">
+              <label class="checkbox-chip" style="width: 100%; align-items: flex-start;" title="Matriks kecamatan x varian kata kunci: menjelajah setiap kecamatan dengan tiap varian (murah/eksklusif/terbaik + sinonim kategori). Lebih lambat, hasil jauh lebih lengkap.">
+                <input type="checkbox" id="studioDeepMatrixCheck" style="margin-top: 0.15rem;">
+                <span>Mode jelajah mendalam <span style="color: var(--ink-faint); font-weight: 500;">(matriks kecamatan × varian — cakupan maksimal)</span></span>
+              </label>
+              <div id="scopeHint" style="font-size: 0.72rem; color: var(--ink-muted); margin-top: 0.4rem; font-variant-numeric: tabular-nums;">Pilih kategori & kota untuk melihat estimasi cakupan.</div>
+            </div>
+
+            <!-- ACTION BUTTONS -->
+            <div style="display: flex; gap: 0.75rem; margin-top: 1.25rem;">
+              <button type="submit" class="btn btn-primary" id="btnRunScrape" style="flex: 1; justify-content: center;">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                <span>Jalankan Scraping</span>
+              </button>
+              <button type="button" class="btn btn-danger" id="btnAbortScrape" style="display: none;">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="6" width="12" height="12"/></svg>
+                <span>Hentikan</span>
+              </button>
+            </div>
+          </form>
+        </div>
+
+        <!-- TELEMETRY STREAM CONSOLE -->
+        <div class="studio-card scrape-visual-card" style="display: flex; flex-direction: column;">
+          <div class="studio-card-title">
+            <span>Terminal Live Telemetry</span>
+            <span id="liveProgressCounter" style="font-size: 0.8rem; color: var(--accent-blue); font-family: var(--font-mono);">0 listing terkumpul</span>
+          </div>
+
+          <!-- Scraping animation: radar + orbiting dots + status -->
+          <div class="scrape-visual" id="scrapeVisual" aria-hidden="true">
+            <div class="radar" id="radarAnim">
+              <span class="radar-sweep"></span>
+              <span class="radar-dot d1"></span>
+              <span class="radar-dot d2"></span>
+              <span class="radar-dot d3"></span>
+              <span class="radar-pin"></span>
+            </div>
+            <div class="scrape-visual-text">
+              <div class="scrape-status-line" id="scrapeStatusLine">Siaga — siap memindai Google Maps</div>
+              <div class="scrape-sub-line" id="scrapeSubLine">Pilih kategori & kota, lalu jalankan scraping</div>
+            </div>
+            <div class="scrape-pct" id="scrapePct">0%</div>
+          </div>
+
+          <div style="width: 100%; height: 8px; background-color: var(--border-subtle); border-radius: 4px; overflow: hidden; margin-bottom: 1rem;" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="liveProgressWrap">
+            <div id="liveProgressBar" style="width: 0%; height: 100%; background: var(--accent-primary); transition: width 0.3s ease;"></div>
+          </div>
+
+          <div class="console-panel" id="consoleLiveBox" aria-live="polite">Siap menerima instruksi pencarian direktori Google Maps...</div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- TAB 3: ANALYTICS & INSIGHTS                -->
+    <!-- ========================================== -->
+    <div class="tab-content" id="tab-analytics">
+      <div class="analytics-grid">
+        
+        <!-- TOP CITIES CHART -->
+        <div class="chart-card">
+          <div class="chart-title">Distribusi Listing per Kota Terbanyak</div>
+          <div id="chartCities"></div>
+        </div>
+
+        <!-- TOP CATEGORIES CHART -->
+        <div class="chart-card">
+          <div class="chart-title">Distribusi Kategori & Jenis Usaha</div>
+          <div id="chartCategories"></div>
+        </div>
+
+        <!-- CONTACT AVAILABILITY -->
+        <div class="chart-card">
+          <div class="chart-title">Ketersediaan Nomor Kontak Telepon</div>
+          <div id="chartContacts"></div>
+        </div>
+
+        <!-- RATING DISTRIBUTION -->
+        <div class="chart-card">
+          <div class="chart-title">Sebaran Mutu Ulasan & Rating Bintang</div>
+          <div id="chartRatings"></div>
+        </div>
+
+      </div>
+    </div>
+
+  </div>
+
+  <!-- SLIDE-OVER DETAIL DRAWER -->
+  <div class="drawer-backdrop" id="drawerBackdrop"></div>
+  <aside class="drawer" id="detailDrawer">
+    <div class="drawer-header">
+      <div>
+        <span class="tag tag-subtle" id="drawerCategory">Kategori</span>
+        <h2 id="drawerName" style="font-size: 1.15rem; font-weight: 700; color: var(--ink-primary); margin-top: 0.35rem; line-height: 1.25;">Nama Tempat</h2>
+        <p id="drawerCity" style="font-size: 0.775rem; color: var(--ink-muted); margin-top: 0.2rem;">Kota, Provinsi</p>
+      </div>
+      <button class="drawer-close" id="btnDrawerClose" title="Tutup (Esc)">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+
+    <!-- PHONE SECTION -->
+    <div class="drawer-section">
+      <div class="drawer-label">Kontak Resmi</div>
+      <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 0.3rem;">
+        <span class="drawer-value" id="drawerPhone" style="font-family: var(--font-mono); font-size: 0.95rem;">-</span>
+        <div style="display: flex; gap: 0.4rem;">
+          <button class="btn btn-surface btn-sm" id="btnCopyPhone">Salin</button>
+          <a class="btn btn-emerald btn-sm" id="btnOpenWA" target="_blank" style="display: none;">WhatsApp</a>
+        </div>
+      </div>
+    </div>
+
+    <!-- ADDRESS SECTION -->
+    <div class="drawer-section">
+      <div class="drawer-label">Alamat Lengkap</div>
+      <div class="drawer-value" id="drawerAddress" style="font-size: 0.825rem; font-weight: 500; color: var(--ink-secondary); line-height: 1.4;">-</div>
+      <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 0.6rem; font-size: 0.725rem; color: var(--ink-muted);">
+        <span id="drawerCoords">-</span>
+        <button class="btn btn-surface btn-sm" id="btnCopyCoords" style="padding: 0.2rem 0.5rem; font-size: 0.7rem;">Salin Koordinat</button>
+      </div>
+    </div>
+
+    <!-- PROXIMITY SECTION -->
+    <div class="drawer-section">
+      <div class="drawer-label">Analisis Radius & Jarak Terdekat</div>
+      <div style="margin-top: 0.5rem; display: flex; flex-direction: column; gap: 0.5rem;">
+        <div style="background: var(--bg-surface); padding: 0.6rem 0.75rem; border-radius: var(--radius-xs); border: 1px solid var(--border-subtle);">
+          <div style="font-size: 0.675rem; color: var(--ink-muted); font-weight: 700; text-transform: uppercase;">KAMPUS / UNIVERSITAS TERDEKAT</div>
+          <div id="drawerCampus" style="font-size: 0.825rem; font-weight: 600; color: var(--accent-blue); margin-top: 0.2rem;">-</div>
+        </div>
+        <div style="background: var(--bg-surface); padding: 0.6rem 0.75rem; border-radius: var(--radius-xs); border: 1px solid var(--border-subtle);">
+          <div style="font-size: 0.675rem; color: var(--ink-muted); font-weight: 700; text-transform: uppercase;">KAWASAN PERKANTORAN / CBD TERDEKAT</div>
+          <div id="drawerOffice" style="font-size: 0.825rem; font-weight: 600; color: var(--accent-emerald); margin-top: 0.2rem;">-</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- RATING SECTION -->
+    <div class="drawer-section">
+      <div class="drawer-label">Ulasan & Rating Google</div>
+      <div style="display: flex; align-items: center; gap: 0.5rem; margin-top: 0.25rem;">
+        <span class="tag tag-amber" id="drawerRating" style="font-size: 0.825rem;">-</span>
+        <span id="drawerReviews" style="font-size: 0.775rem; color: var(--ink-muted); font-variant-numeric: tabular-nums;">-</span>
+      </div>
+    </div>
+
+    <!-- ACTION LINKS -->
+    <div style="display: flex; gap: 0.5rem; margin-top: auto; padding-top: 0.5rem;">
+      <a class="btn btn-primary" id="drawerMapsLink" target="_blank" style="flex: 1; justify-content: center;">
+        Buka di Google Maps
+      </a>
+      <a class="btn btn-surface" id="drawerWebLink" target="_blank" style="display: none;">
+        Website
+      </a>
+    </div>
+  </aside>
+
+  <div class="toast-stack" id="toastStack" aria-live="polite" aria-atomic="true"></div>
+
+  <!-- FAQ MODAL -->
+  <div class="license-backdrop" id="faqModal" hidden>
+    <div class="license-card" role="dialog" aria-modal="true" aria-labelledby="faqTitle">
+      <div class="license-brand">
+        <div>
+          <h2 id="faqTitle">FAQ — Pertanyaan Umum</h2>
+          <p>Google Maps Directory Platform</p>
+        </div>
+      </div>
+      <div class="faq-list">
+        <details open>
+          <summary>Berapa lama masa trial gratis?</summary>
+          <p>3 hari sejak aplikasi pertama kali dibuka di perangkat ini. Penghitung tampil di pill lisensi bilah atas.</p>
+        </details>
+        <details>
+          <summary>Bagaimana cara mendapatkan kode aktivasi?</summary>
+          <p>Kirim email ke <a href="mailto:support@99apps.id?subject=Permintaan%20Kode%20Aktivasi%20GMST%20Scraper">support@99apps.id</a> dengan mencantumkan ID instalasi (lihat menu Pengaturan → Lisensi). Setelah membayar (QRIS), kode dikirim ke email Anda.</p>
+        </details>
+        <details>
+          <summary>Saya ganti perangkat, bagaimana?</summary>
+          <p>Buka menu Pengaturan → Lisensi → <em>Nonaktifkan lisensi perangkat ini</em> di perangkat lama, lalu masukkan kode yang sama di perangkat baru.</p>
+        </details>
+        <details>
+          <summary>Apakah data hasil scrape saya terlihat orang lain?</summary>
+          <p>Tidak. Data tersimpan lokal di perangkat Anda (aplikasi desktop) atau file Excel Anda sendiri (dashboard). Server hanya memproses pencarian.</p>
+        </details>
+        <details>
+          <summary>Apakah harus selalu online?</summary>
+          <p>Ya, untuk menjalankan scraping (diproses via server) dan verifikasi lisensi berkala.</p>
+        </details>
+        <details>
+          <summary>Kode saya ditolak padahal baru diterima?</summary>
+          <p>Periksa pengetikan (huruf besar semua, tanpa spasi). Bila tetap gagal, hubungi support@99apps.id dengan ID instalasi Anda.</p>
+        </details>
+      </div>
+      <button class="btn btn-surface" id="btnFaqClose" style="width: 100%; justify-content: center; margin-top: 1rem;">Tutup</button>
+    </div>
+  </div>
+
+  <!-- ABOUT MODAL -->
+  <div class="license-backdrop" id="aboutModal" hidden>
+    <div class="license-card" role="dialog" aria-modal="true" aria-labelledby="aboutTitle">
+      <div class="license-brand">
+        <svg width="34" height="34" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M12 2C7.58 2 4 5.58 4 10C4 15.25 12 22 12 22C12 22 20 15.25 20 10C20 5.58 16.42 2 12 2Z" fill="#EA4335"/>
+          <circle cx="12" cy="10" r="3.2" fill="#FFFFFF"/>
+        </svg>
+        <div>
+          <h2 id="aboutTitle">Tentang GMST Scraper</h2>
+          <p>Google Maps Directory Platform v0.1.0</p>
+        </div>
+      </div>
+      <div class="about-rows">
+        <div class="about-row"><span>Engine server</span><code>https://gmst.dewa.ai.id</code></div>
+        <div class="about-row"><span>ID instalasi</span><code id="aboutInstallId">-</code></div>
+        <div class="about-row"><span>Status lisensi</span><code id="aboutLicenseState">-</code></div>
+      </div>
+      <p class="license-desc" style="margin-top: 0.85rem;">Platform intelijen direktori bisnis Google Maps Indonesia — dilengkapi mesin proximity kampus & perkantoran, ekspor Excel/CSV/JSON, dan lisensi serial per perangkat. Dukungan: support@99apps.id.</p>
+      <button class="btn btn-surface" id="btnAboutClose" style="width: 100%; justify-content: center;">Tutup</button>
+    </div>
+  </div>
+
+  <!-- LICENSE MODAL (onboarding trial 3 hari / aktivasi / kedaluwarsa) -->
+  <div class="license-backdrop" id="licenseModal" hidden>
+    <div class="license-card" role="dialog" aria-modal="true" aria-labelledby="licenseTitle">
+      <div class="license-brand">
+        <svg width="34" height="34" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M12 2C7.58 2 4 5.58 4 10C4 15.25 12 22 12 22C12 22 20 15.25 20 10C20 5.58 16.42 2 12 2Z" fill="#EA4335"/>
+          <circle cx="12" cy="10" r="3.2" fill="#FFFFFF"/>
+        </svg>
+        <div>
+          <h2 id="licenseTitle">Aktivasi Aplikasi</h2>
+          <p id="licenseSubtitle">Google Maps Directory Platform</p>
+        </div>
+      </div>
+      <p class="license-desc" id="licenseDesc"></p>
+
+      <!-- KARTU PILIHAN METODE PEMBAYARAN SINGAPAY -->
+      <div class="license-plans-section" id="licensePlansSection">
+        <div class="license-plans-title">
+          <span>Pilih Paket Lisensi</span>
+          <span style="font-size: 0.65rem; color: var(--accent-emerald); font-weight: 700;">QRIS / Virtual Account Singapay</span>
+        </div>
+        <div class="license-plans-grid" id="licensePlansGrid">
+          <!-- Render dinamis dari /api/payment/options -->
+        </div>
+        <p class="license-plans-footnote">
+          Setelah pembayaran berhasil, aplikasi akan <b>aktif otomatis</b> dalam beberapa detik.
+        </p>
+
+        <!-- STATUS POLLING AKTIF OTOMATIS -->
+        <div class="license-auto-status" id="licenseAutoStatus" hidden>
+          <span class="spinner" aria-hidden="true"></span>
+          <span id="licenseAutoStatusText">Menunggu pembayaran Singapay... (aplikasi aktif otomatis)</span>
+        </div>
+
+        <!-- AKTIFKAN LANGSUNG VIA NOMOR REFERENSI STRUK -->
+        <div class="license-quick-reff">
+          <input type="text" id="inputQuickReff" placeholder="Nomor Referensi Struk Singapay (cth: 189177...)" autocomplete="off" spellcheck="false">
+          <button class="btn btn-surface btn-sm" id="btnVerifyQuickReff" type="button">Aktifkan via Ref</button>
+        </div>
+      </div>
+
+      <div class="license-divider">Atau masukkan kode aktivasi</div>
+
+      <label class="license-label" for="licenseSerialInput">Kode aktivasi</label>
+      <input type="text" id="licenseSerialInput" class="license-input" placeholder="Masukkan kode aktivasi" autocomplete="off" spellcheck="false" maxlength="24">
+      <div class="license-error" id="licenseError" hidden></div>
+      <div class="license-actions">
+        <button class="btn btn-primary" id="btnActivateLicense" style="flex: 1; justify-content: center;">
+          <span>Aktivasi Sekarang</span>
+        </button>
+      </div>
+      <button class="btn btn-surface" id="btnContinueTrial" style="width: 100%; justify-content: center; margin-top: 0.5rem;">
+        <span id="btnContinueTrialText">Lanjutkan gratis selama 3 hari</span>
+      </button>
+      <button class="btn btn-surface btn-sm" id="btnDeactivateLicense" style="width: 100%; justify-content: center; margin-top: 0.5rem; color: var(--accent-rose);" hidden>
+        <span>Nonaktifkan lisensi perangkat ini</span>
+      </button>
+      <p class="license-support">Belum punya kode? Minta ke <a href="mailto:support@99apps.id?subject=Permintaan%20Kode%20Aktivasi%20GMST%20Scraper">support@99apps.id</a> (sertakan ID instalasi di bawah).</p>
+      <div class="license-meta">
+        <span>ID Instalasi: <code id="licenseInstallId">-</code></span>
+        <button class="btn btn-surface btn-sm" id="btnCopyInstallId" style="padding: 0.15rem 0.5rem; font-size: 0.68rem;">Salin</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/app.js?v=2.0.0"></script>
+</body>
+</html>

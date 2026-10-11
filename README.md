@@ -2,7 +2,7 @@
 
   <img src="public/favicon.svg" alt="GMST Logo" width="80" height="80">
 
-  # GMST Scraper — Google Maps Studio
+  # GMST Scraper — Google Maps Scraper Studio
   ### Enterprise Business Intelligence, Proximity Analysis & Leads Scraper Indonesia
 
   [![Release](https://img.shields.io/github/v/release/99apps-id/gmaps-scraper-studio?color=2563eb&label=Release&logo=github)](https://github.com/99apps-id/gmaps-scraper-studio/releases/latest)

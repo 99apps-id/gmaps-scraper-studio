@@ -74,10 +74,37 @@
         "deb"
       ],
       "icon": "electron/assets/icon.png",
-      "category": "Office"
+      "category": "Office",
+      "maintainer": "99apps.id <support@99apps.id>",
+      "vendor": "99apps.id",
+      "description": "GMST Scraper - Google Maps business directory intelligence desktop app",
+      "desktop": {
+        "Name": "GMST Scraper",
+        "Comment": "Google Maps business directory intelligence",
+        "Categories": "Office;Business;"
+      }
+    },
+    "deb": {
+      "depends": [
+        "libgtk-3-0",
+        "libnotify4",
+        "libnss3",
+        "libxss1",
+        "libxtst6",
+        "xdg-utils",
+        "libatspi2.0-0",
+        "libuuid1",
+        "libsecret-1-0"
+      ]
     }
   },
   "allowScripts": {
     "electron@34.5.8": true
+  },
+  "description": "GMST Scraper - Google Maps business directory intelligence desktop app",
+  "author": {
+    "name": "99apps.id",
+    "email": "support@99apps.id",
+    "url": "https://99apps.id"
   }
 }

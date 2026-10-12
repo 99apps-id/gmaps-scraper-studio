@@ -30,6 +30,15 @@ jobs:
       - name: Install Dependencies
         run: npm ci
 
+      - name: Install Linux build dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libgtk-3-0 libnotify4 libnss3 libxss1 libxtst6 \
+            xdg-utils libatspi2.0-0 libuuid1 libsecret-1-0 \
+            fakeroot rpm
+
       - name: Build Desktop App
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

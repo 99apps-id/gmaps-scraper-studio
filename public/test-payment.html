@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <title>Payment Page Test</title>
+</head>
+<body>
+  <h1>Halaman Payment</h1>
+  <form id="payment-form">
+    <label>
+      Nama:
+      <input type="text" name="name" />
+    </label>
+    <br />
+    <label>
+      Email:
+      <input type="email" name="email" />
+    </label>
+    <br />
+    <label>
+      Nomor HP:
+      <input type="tel" name="phone" />
+    </label>
+    <br />
+    <button type="submit">Bayar Sekarang</button>
+  </form>
+
+  <script>
+    const form = document.getElementById('payment-form');
+    form.addEventListener('submit', (event) => {
+      event.preventDefault();
+      const formData = new FormData(form);
+      const payload = Object.fromEntries(formData.entries());
+      alert(JSON.stringify(payload, null, 2));
+    });
+  </script>
+</body>
+</html>

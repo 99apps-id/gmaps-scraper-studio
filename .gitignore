@@ -5,3 +5,9 @@ release/
 .termixgo/
 *.log
 *.xlsx
+# Secrets & local state — JANGAN commit ke repo publik
+.env
+.env.*
+license.json
+licenses.json
+payments.json

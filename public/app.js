@@ -294,8 +294,8 @@ async function loadPaymentPlans() {
   } catch (err) {
     // Fallback paket default Singapay jika offline / endpoint lokal gagal
     const fallback = [
-      { id: 'harian', label: 'Paket 1 Hari', shortLabel: '1 Hari', amountLabel: 'Rp15.000', days: 1, url: 'https://payment-link.singapay.id/b2b/PL202610111742326acb6818a083e' },
-      { id: 'mingguan', label: 'Paket 7 Hari', shortLabel: '7 Hari', amountLabel: 'Rp50.000', days: 7, url: 'https://payment-link.singapay.id/b2b/PL202610111745086acb68b4360e7' }
+      { id: 'harian', label: 'Paket 1 Hari', shortLabel: '1 Hari', amountLabel: 'Rp15.000', days: 1, checkoutPath: '/api/payment/dynamic/harian/checkout', url: 'https://payment-link.singapay.id/b2b/PL202610111742326acb6818a083e' },
+      { id: 'mingguan', label: 'Paket 7 Hari', shortLabel: '7 Hari', amountLabel: 'Rp50.000', days: 7, checkoutPath: '/api/payment/dynamic/mingguan/checkout', url: 'https://payment-link.singapay.id/b2b/PL202610111745086acb68b4360e7' }
     ];
     renderPaymentPlans(fallback);
   }
@@ -311,8 +311,9 @@ function renderPaymentPlans(plans) {
   container.innerHTML = sorted.map((p) => {
     const isWeek = p.days >= 7;
     const badgeHtml = isWeek ? '<span class="license-plan-badge">Hemat</span>' : '';
+    const checkoutPath = p.checkoutPath || p.paths?.checkout || '/api/payment/dynamic/' + encodeURIComponent(p.id) + '/checkout';
     return `
-      <div class="license-plan-card" data-url="${escapeHtml(p.url)}" role="button" tabindex="0" title="Beli ${escapeHtml(p.label)} (${escapeHtml(p.amountLabel)})">
+      <div class="license-plan-card" data-id="${escapeHtml(p.id)}" data-checkout="${escapeHtml(checkoutPath)}" role="button" tabindex="0" title="Beli ${escapeHtml(p.label)} (${escapeHtml(p.amountLabel)})">
         ${badgeHtml}
         <div class="license-plan-name">${escapeHtml(p.shortLabel || p.label)}</div>
         <div class="license-plan-price">${escapeHtml(p.amountLabel)}</div>
@@ -325,16 +326,31 @@ function renderPaymentPlans(plans) {
   }).join('');
 
   container.querySelectorAll('.license-plan-card').forEach((card) => {
-    const handleOpen = () => {
-      const url = card.dataset.url;
-      if (!url) return;
-      if (window.electronAPI && typeof window.electronAPI.openExternal === 'function') {
-        window.electronAPI.openExternal(url);
-      } else {
-        window.open(url, '_blank', 'noopener,noreferrer');
+    const handleOpen = async () => {
+      const checkoutPath = card.dataset.checkout;
+      if (!checkoutPath) return;
+      try {
+        showToast('Membuat tautan pembayaran...', 'info');
+        const res = await fetch(checkoutPath, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+        const data = await res.json().catch(() => ({}));
+        const checkoutUrl = data.checkoutUrl || data.url || null;
+        if (!res.ok || !checkoutUrl) {
+          const code = data.code ? ` (${data.code})` : '';
+          throw new Error(`${data.error || `Gagal membuat tautan pembayaran (HTTP ${res.status})`}${code}`);
+        }
+        if (data.dynamic === false) {
+          showToast('Mode pembayaran statis: selesaikan pembayaran, lalu aktivasi otomatis / klaim dengan nomor referensi.', 'info');
+        }
+        if (window.electronAPI && typeof window.electronAPI.openExternal === 'function') {
+          window.electronAPI.openExternal(checkoutUrl);
+        } else {
+          window.open(checkoutUrl, '_blank', 'noopener,noreferrer');
+        }
+        showToast('Halaman checkout Singapay dibuka. Aplikasi akan aktif otomatis setelah pembayaran selesai.', 'info');
+        startAutoActivationPolling(data.reffNo);
+      } catch (err) {
+        showToast(err.message || 'Gagal membuat tautan pembayaran.', 'error');
       }
-      showToast('Halaman checkout Singapay dibuka. Aplikasi akan aktif otomatis setelah pembayaran selesai.', 'info');
-      startAutoActivationPolling();
     };
     card.addEventListener('click', handleOpen);
     card.addEventListener('keydown', (e) => {
@@ -346,7 +362,7 @@ function renderPaymentPlans(plans) {
   });
 }
 
-function startAutoActivationPolling() {
+function startAutoActivationPolling(reffNo) {
   checkoutStartedAt = new Date().toISOString();
   const statusBox = document.getElementById('licenseAutoStatus');
   const statusTxt = document.getElementById('licenseAutoStatusText');
@@ -366,10 +382,12 @@ function startAutoActivationPolling() {
     }
 
     try {
+      const body = { since: checkoutStartedAt };
+      if (reffNo) body.reff = reffNo;
       const res = await fetch('/api/payment/auto-activate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ since: checkoutStartedAt })
+        body: JSON.stringify(body)
       });
       const data = await res.json();
       if (data.found && data.status) {

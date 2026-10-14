@@ -12,7 +12,10 @@ import { exportToExcel } from './lib/excel.js';
 import { CATEGORY_SECTORS, REGION_CLUSTERS } from './lib/catalog.js';
 import { getLicenseStatus, markOnboarded, activateLicenseOnline, validateSerial, loadLicenseState, deactivateLicense } from './lib/license.js';
 import { executeScrapePlan, provinceForCity } from './lib/scrape-runner.js';
-import { WEBHOOK_PATH, CLAIM_PATH, verifySingapaySignature, fulfillPaymentLink, claimByReff, findLatestOrderAfter, normalizeLicenseEntries, normalizeRevoked, findPlanForSerial, paymentOptions } from './lib/payment.js';
+import { WEBHOOK_PATH, CLAIM_PATH, PLANS, verifySingapaySignature, 
+fulfillPaymentLink, claimByReff, findLatestOrderAfter, normalizeLicenseEntries, normalizeRevoked, findPlanForSerial, 
+paymentOptions, createDynamicPaymentLink, verifyDynamicPaymentToken, markOrderActivated, isOrderStillActive, 
+orderReuseStatus, fetchVpsOrderByReff } from './lib/payment.js';
 
 // NOTE: ./lib/scraper.js (engine Google RPC) TIDAK diimpor statis di sini.
 // Ia di-load lazy oleh scrape-runner agar paket klien bisa diedarkan
@@ -92,7 +95,15 @@ function setSecurityHeaders(res) {
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
 }
 
-function readJsonBody(req, limit = MAX_BODY_BYTES) {
+function safeJsonParse(raw) {
+  if (!raw || typeof raw !== 'string') return null;
+  let s = raw.trim();
+  if (!s.length) return null;
+  if (s.charCodeAt(0) === 0xFEFF) s = s.slice(1);
+  try { return JSON.parse(s); } catch (e) { return null; }
+}
+
+function readRawBody(req, limit = MAX_BODY_BYTES) {
   return new Promise((resolve, reject) => {
     let size = 0;
     let body = '';
@@ -105,15 +116,19 @@ function readJsonBody(req, limit = MAX_BODY_BYTES) {
       }
       body += chunk;
     });
-    req.on('end', () => {
-      if (!body) return resolve({});
-      try {
-        resolve(JSON.parse(body));
-      } catch {
-        reject(Object.assign(new Error('Body JSON tidak valid'), { status: 400 }));
-      }
-    });
+    req.on('end', () => resolve(body));
     req.on('error', reject);
+  });
+}
+
+function readJsonBody(req, limit = MAX_BODY_BYTES) {
+  return readRawBody(req, limit).then((body) => {
+    if (!body) return {};
+    const parsed = safeJsonParse(body);
+    if (parsed === null) {
+      throw Object.assign(new Error('Body JSON tidak valid'), { status: 400 });
+    }
+    return parsed;
   });
 }
 
@@ -130,8 +145,8 @@ function validateScrapePayload(payload) {
   cities = [...new Set(cities.map((c) => cleanStr(c, 60)).filter((c) => c.length >= 2))].slice(0, 20);
   if (cities.length === 0) throw Object.assign(new Error('Nama kota tidak valid'), { status: 400 });
   let depth = parseInt(payload?.depth, 10);
-  if (!Number.isFinite(depth)) depth = 2;
-  depth = Math.max(1, Math.min(5, depth));
+  if (!Number.isFinite(depth)) depth = 3;
+  depth = Math.max(1, Math.min(7, depth));
   const proximity = payload?.proximity !== false;
   const deepMatrix = payload?.deepMatrix === true;
   let keywordVariants = payload?.keywordVariants;
@@ -247,8 +262,8 @@ function broadcastProgress(percent, statusText, totalRecords) {
 // Generates layered queries: base city -> ALL sub-districts -> qualifier
 // variants (murah/eksklusif/terbaik/segment) -> proximity/landmark ->
 // optional keyword-variant & deep-matrix expansion. Capped per city.
-const MAX_QUERIES_PER_CITY = 60;
-const DEEP_QUALIFIERS = ['murah', 'eksklusif', 'terbaik'];
+const MAX_QUERIES_PER_CITY = 100;
+const DEEP_QUALIFIERS = ['murah', 'eksklusif', 'terbaik', 'populer', 'rekomendasi', 'harga murah', 'berkualitas'];
 const KOST_SEGMENTS = ['putra', 'putri', 'campur', 'pasutri', 'harian', 'bulanan'];
 
 function isKostLike(keyword) {
@@ -616,6 +631,53 @@ async function proxyScrapeToEngine({ serial, installId, job, plan }) {
   }
 }
 
+// Proxy umum ke VPS engine (untuk endpoint yang tidak boleh dijalankan di klien).
+// Meneruskan body MENTAH apa adanya agar signature/HMAC & JSON upstream tetap valid.
+// Bug lama: body hasil parse (object) dikirim sebagai fetch body -> menjadi
+// string "[object Object]" di VPS -> VPS menjawab 400 "Body JSON tidak valid".
+async function proxyToEngine(pathname, req, res) {
+  if (ENGINE_MODE !== 'client') return false;
+  if (!ENGINE_URL) {
+    res.writeHead(503, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ error: 'ENGINE_URL belum dikonfigurasi di aplikasi ini.' }));
+    return true;
+  }
+  const qs = req.url.includes('?') ? req.url.slice(req.url.indexOf('?')) : '';
+  const upstreamUrl = new URL(`${ENGINE_URL}${pathname}${qs}`);
+  const isBodyless = ['GET', 'HEAD'].includes(req.method);
+  let rawBody = '';
+  if (!isBodyless) {
+    try {
+      rawBody = await readRawBody(req);
+    } catch (err) {
+      res.writeHead(err.status || 400, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: err.message }));
+      return true;
+    }
+  }
+  const headers = {
+    Accept: (req.headers['accept'] || 'application/json')
+  };
+  if (!isBodyless && rawBody) {
+    headers['Content-Type'] = (req.headers['content-type'] || 'application/json');
+  }
+  try {
+    const upstream = await fetch(upstreamUrl.toString(), {
+      method: req.method,
+      headers,
+      body: isBodyless || !rawBody ? undefined : rawBody
+    });
+    const contentType = upstream.headers.get('content-type') || 'application/json';
+    const body = await upstream.text();
+    res.writeHead(upstream.status, { 'Content-Type': contentType });
+    res.end(body);
+  } catch (err) {
+    res.writeHead(502, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ error: err.message || 'Gagal terhubung ke VPS engine' }));
+  }
+  return true;
+}
+
 // 5. HTTP SERVER
 const server = http.createServer(async (req, res) => {
   setSecurityHeaders(res);
@@ -743,8 +805,12 @@ const server = http.createServer(async (req, res) => {
   // Dikembalikan di semua mode (local/engine/client) agar tombol "Bayar"
   // selalu tampil, termasuk saat perpanjangan dari aplikasi.
   if (pathname === '/api/payment/options' && req.method === 'GET') {
+    if (ENGINE_MODE === 'client') {
+      const proxied = await proxyToEngine(pathname, req, res);
+      if (proxied) return;
+    }
     res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'public, max-age=3600' });
-    res.end(JSON.stringify({ currency: 'IDR', claimUrl: CLAIM_PATH, plans: paymentOptions() }));
+    res.end(JSON.stringify({ currency: 'IDR', claimUrl: CLAIM_PATH, plans: paymentOptions(req) }));
     return;
   }
 
@@ -755,32 +821,37 @@ const server = http.createServer(async (req, res) => {
       const payload = await readJsonBody(req);
       const reff = String(payload?.reff || '').trim();
       const since = String(payload?.since || '').trim();
-
       let order = null;
-      if (reff) {
-        order = claimByReff(reff);
-      } else if (since) {
-        order = findLatestOrderAfter(since);
+      if (reff) order = claimByReff(reff);
+      else if (since) order = findLatestOrderAfter(since);
+      // Klien tak menerima webhook: butir reff dicarikan ke VPS (klaim).
+      if (!order?.serial && reff && ENGINE_MODE === 'client') {
+        const remote = await fetchVpsOrderByReff(reff).catch(() => null);
+        if (remote?.serial) order = remote;
       }
-
-      if (!order || !order.serial) {
+      if (!order?.serial) {
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ found: false, message: 'Pembayaran belum ditemukan atau masih diproses' }));
         return;
       }
-
-      // Aktifkan langsung lisensi perangkat dengan paket terkait
+      const reuse = orderReuseStatus(reff);
+      if (reuse.found && reuse.stillActive) {
+        const baseTime = reuse.created_at ? new Date(reuse.created_at) : new Date();
+        const planOpts = { plan: order.plan || 'berbayar', durationDays: order.days || 1 };
+        const activateRes = await activateLicenseOnline(order.serial, baseTime, planOpts);
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ found: true, serial: order.serial, plan: order.plan, days: order.days, status: activateRes.status, reused: true }));
+        return;
+      }
+      if (reuse.found && !reuse.stillActive) {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ found: false, message: 'Masa aktif lisensi dari pembayaran ini sudah habis. Silakan lakukan pembayaran baru untuk melanjutkan.', code: 'ORDER_EXPIRED' }));
+        return;
+      }
       const planOpts = { plan: order.plan || 'berbayar', durationDays: order.days || 1 };
       const activateRes = await activateLicenseOnline(order.serial, new Date(), planOpts);
-
       res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({
-        found: true,
-        serial: order.serial,
-        plan: order.plan,
-        days: order.days,
-        status: activateRes.status
-      }));
+      res.end(JSON.stringify({ found: true, serial: order.serial, plan: order.plan, days: order.days, status: activateRes.status }));
     } catch (err) {
       res.writeHead(err.status || 500, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ found: false, error: err.message }));
@@ -788,11 +859,90 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  // DYNAMIC PAYMENT LINK SINGAPAY
+  // Flow: frontend panggil checkout -> server panggil Singapay API -> kembalikan payment_url -> open di browser -> callback ke claim/success/expired.
+  const dynamicPaymentMatch = pathname.match(/^\/api\/payment\/dynamic\/([^\/]+)\/(checkout|status|success|expired)$/);
+  if (dynamicPaymentMatch && req.method !== undefined) {
+    if (ENGINE_MODE === 'client') {
+      const proxied = await proxyToEngine(pathname, req, res);
+      if (proxied) return;
+    }
+    const [, planId, action] = dynamicPaymentMatch;
+    const licState = (() => { try { return loadLicenseState(); } catch { return {}; } })();
+
+    const sendJson = (status, body) => {
+      if (!res.headersSent) res.writeHead(status || 400, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify(body));
+    };
+
+    if (action === 'checkout' && req.method === 'POST') {
+      const plan = (PLANS && PLANS[planId]) ? PLANS[planId] : null;
+      if (!plan) return sendJson(400, { error: 'Paket tidak valid' });
+      try {
+        // Checkout tidak butuh parameter body; toleran terhadap body kosong,
+        // Content-Type non-JSON, atau client lama agar tak 400 "Body JSON tidak valid".
+        try {
+          await readJsonBody(req);
+        } catch {
+          /* abaikan: checkout tanpa parameter */
+        }
+        const result = await createDynamicPaymentLink({ planId, amount: plan.amount, days: plan.days, req, licenseState: licState || {} });
+        // Fallback statis (tanpa kredensial Singapay / tanpa redirect host):
+        // tetap kembalikan paymentUrl agar frontend bisa membuka link statis.
+        const checkoutUrl = result.paymentUrl || result.url || plan.url || null;
+        if (!checkoutUrl) return sendJson(result.status || 503, { error: result.error || 'Gagal membuat tautan pembayaran', code: result.code || 'CHECKOUT_FAILED' });
+        sendJson(200, { success: true, checkoutUrl, reffNo: result.reffNo || null, planId: result.planId || planId, amount: result.amount || plan.amount, days: result.days || plan.days, expiredAt: result.expiredAt || null, dynamic: result.dynamic !== false });
+      } catch (err) {
+        // Fallback terakhir: bila Singapay belum dikonfigurasi di server ini,
+        // arahkan ke Payment Link statis agar user tetap bisa bayar manual
+        // (aktivasi via reff/klaim), bukan error mentah.
+        if (err.code === 'SINGAPAY_NOT_CONFIGURED' && plan.url) {
+          return sendJson(200, { success: true, checkoutUrl: plan.url, reffNo: null, planId, amount: plan.amount, days: plan.days, expiredAt: null, dynamic: false, fallback: true });
+        }
+        sendJson(err.status || 500, { error: err.message, code: err.code || 'CHECKOUT_FAILED' });
+      }
+      return;
+    }
+
+    if (action === 'status' && req.method === 'GET') {
+      const token = String(urlObj.searchParams.get('token') || '').trim();
+      if (!token) return sendJson(400, { error: 'Token tidak valid' });
+      const data = verifyDynamicPaymentToken(token);
+      if (!data || data.planId !== planId) return sendJson(400, { error: 'Token tidak valid' });
+      const rec = data.reffNo ? claimByReff(data.reffNo) : null;
+      sendJson(200, { valid: true, planId: data.planId, reffNo: data.reffNo, paid: Boolean(rec), serial: rec?.serial || null });
+      return;
+    }
+
+    if ((action === 'success' || action === 'expired') && req.method === 'GET') {
+      const token = String(urlObj.searchParams.get('token') || '').trim();
+      const tokenData = token ? verifyDynamicPaymentToken(token) : null;
+      const reff = tokenData?.reffNo || (token ? token : null);
+      const rec = reff ? claimByReff(reff) : null;
+      const isOk = action === 'success';
+      const html = isOk
+        ? `<!DOCTYPE html><html lang="id"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Pembayaran Berhasil</title><style>body{font-family:system-ui,sans-serif;background:#f8fafc;color:#0f172a;display:flex;justify-content:center;padding:2rem 1rem}main{background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:1.5rem;max-width:460px;width:100%}button{background:#0f172a;color:#fff;border:none;border-radius:8px;padding:.6rem 1rem;font-weight:700;cursor:pointer;margin-top:1rem}.missing{color:#be123c}</style></head><body><main><h1>Pembayaran Berhasil</h1>${rec ? `<p>Paket <b>${rec.plan}</b> (${rec.days} hari).</p><p>Kode aktivasi: <b>${rec.serial}</b></p><p>Salin kode ini ke aplikasi untuk mengaktifkan lisensi.</p>` : '<p>Pembayaran diterima.</p>'}<button onclick="window.close()">Tutup</button></main></body></html>`
+        : `<!DOCTYPE html><html lang="id"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Pembayaran Kadaluarsa</title><style>body{font-family:system-ui,sans-serif;background:#f8fafc;color:#0f172a;display:flex;justify-content:center;padding:2rem 1rem}main{background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:1.5rem;max-width:460px;width:100%}a{color:#2563eb}button{background:#0f172a;color:#fff;border:none;border-radius:8px;padding:.6rem 1rem;font-weight:700;cursor:pointer;margin-top:1rem}</style></head><body><main><h1>Link Kadaluarsa</h1><p>Silakan buka kembali aplikasi untuk membuat tautan pembayaran baru.</p><a href="/">Buka aplikasi</a></main></body></html>`;
+      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+      res.end(html);
+      return;
+    }
+
+    sendJson(405, { error: 'Metode tidak diizinkan' });
+    return;
+  }
+
   // PAYMENT WEBHOOK SINGAPAY (Payment Link money-in -> serial otomatis)
   // Daftarkan URL ini sebagai transaction_notif_url di dashboard Singapay:
   //   https://gmst.dewa.ai.id/api/payment/singapay
   if (pathname === WEBHOOK_PATH && req.method === 'POST') {
-    const secret = process.env.SINGAPAY_CLIENT_SECRET || '';
+    if (ENGINE_MODE === 'client') {
+      const proxied = await proxyToEngine(pathname, req, res);
+      if (proxied) return;
+    }
+    // Webhook boleh memakai HMAC Validation Key bila dashboard memberikannya
+    // terpisah dari Client Secret; fallback ke Client Secret bila tidak diset.
+    const secret = process.env.SINGAPAY_HMAC_KEY || process.env.SINGAPAY_CLIENT_SECRET || '';
     if (!secret) {
       res.writeHead(503, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ status: 'error', message: 'Payment belum dikonfigurasi' }));
@@ -821,7 +971,30 @@ const server = http.createServer(async (req, res) => {
       }
       let payload;
       try {
-        payload = JSON.parse(rawBody);
+        if (!rawBody || !rawBody.trim().length) {
+          console.error('[Payment] Webhook body kosong:', {
+            headers: {
+              ct: headers['content-type'],
+              sig: headers['x-signature'] ? 'present' : 'missing',
+              ts: headers['x-timestamp']
+            }
+          });
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ status: 'error', message: 'Body webhook kosong' }));
+          return;
+        }
+        payload = safeJsonParse(rawBody);
+        if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+          console.error('[Payment] Webhook payload bukan object:', {
+            type: typeof payload,
+            isArray: Array.isArray(payload),
+            len: rawBody?.length,
+            head: rawBody ? rawBody.slice(0, 200) : ''
+          });
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ status: 'error', message: 'Payload webhook harus berupa object JSON' }));
+          return;
+        }
       } catch {
         res.writeHead(400, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ status: 'error', message: 'Body JSON tidak valid' }));
@@ -839,9 +1012,28 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  // ORDER JSON (untuk aktivasi otomatis klien paket tanpa scraping HTML klaim).
+  // GET /api/payment/order?ref=REFF_NO -> { found, serial, plan, days }
+  if (pathname === '/api/payment/order' && req.method === 'GET') {
+    if (ENGINE_MODE === 'client') {
+      const proxied = await proxyToEngine(pathname, req, res);
+      if (proxied) return;
+    }
+    const ref = String(urlObj.searchParams.get('ref') || '').trim();
+    const rec = ref ? claimByReff(ref) : null;
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    if (rec) res.end(JSON.stringify({ found: true, serial: rec.serial, plan: rec.plan, days: rec.days }));
+    else res.end(JSON.stringify({ found: false, message: 'Referensi tidak ditemukan' }));
+    return;
+  }
+
   // CLAIM PAGE: success_redirect_url payment link -> .../api/payment/claim?ref=REFF_NO
   // Tanpa ?ref: form input reff manual. Dengan ?ref valid: tampilkan serial.
   if (pathname === CLAIM_PATH && req.method === 'GET') {
+    if (ENGINE_MODE === 'client') {
+      const proxied = await proxyToEngine(pathname, req, res);
+      if (proxied) return;
+    }
     const ref = String(urlObj.searchParams.get('ref') || '').trim();
     const escapeHtmlClaim = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
     let inner;

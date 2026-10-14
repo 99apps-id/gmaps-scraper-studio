@@ -11,7 +11,7 @@
     "gen:license": "node tools/gen-license.js",
     "gen:icon": "node tools/build-icon.js",
     "electron": "electron .",
-    "dist:win": "electron-builder --win",
+    "dist:win": "electron-builder --win --publish never",
     "dist:mac": "electron-builder --mac",
     "dist:linux": "electron-builder --linux",
     "dist:all": "electron-builder -mwl"
@@ -20,7 +20,7 @@
     "exceljs": "^4.4.0"
   },
   "devDependencies": {
-    "electron": "^34.0.0",
+    "electron": "^34.5.8",
     "electron-builder": "^25.0.0"
   },
   "build": {

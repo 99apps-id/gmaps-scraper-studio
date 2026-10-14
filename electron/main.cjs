@@ -155,9 +155,9 @@ app.whenReady().then(async () => {
   };
 
   // Tripwire integritas (hanya versi packaged): asar yang dibedah/dimodifikasi
-  // membuat engine dimatikan (scrape gagal + pesan humanis di dashboard).
-  // Non-blocking: dashboard tetap dibuka (user bisa aktivasi/install ulang).
-  // Best-effort, bukan absolut (benteng utama = engine VPS).
+  // membuat scraping diperingatkan, tapi tidak diblokir.
+  // Non-blocking: dashboard tetap bisa dibuka (user bisa aktivasi/install ulang).
+  // Best-effort, bukan absolut (benteng utama = engine VPS + lisensi).
   if (app.isPackaged) {
     try {
       const { checkIntegrity } = require('./integrity-check.cjs');
@@ -166,8 +166,10 @@ app.whenReady().then(async () => {
       const integrityUrl = process.env.INTEGRITY_URL || `${engineUrl}/integrity.json`;
       const res = await checkIntegrity({ asarPath, integrityUrl });
       if (res.checked && !res.ok) {
-        process.env.DISABLE_ENGINE = '1';
-        mainLog('integritas GAGAL (hash tak cocok) — engine dimatikan.');
+        // Jangan blokir engine. Build cross-OS/CI bisa menghasilkan hash app.asar
+        // berbeda meskipun source sama (timestamp di dalam ASAR).
+        // Integrity check tetap tercatat sebagai peringatan untuk audit.
+        mainLog(`integritas GAGAL (hash tak cocok) — scraping tetap aktif (${res.actual || '?'}).`);
       } else if (res.checked) {
         mainLog('integritas OK.');
       } else {

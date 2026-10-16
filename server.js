@@ -542,6 +542,15 @@ function authorizeEngineSerial(serial) {
     if (strict && !list.licenses.has(needle)) {
       throw Object.assign(new Error('Serial tidak terdaftar di VPS.'), { status: 403, code: 'ENGINE_NOT_LISTED' });
     }
+    // Penegakan masa aktif: bila entri punya expires_at dan sudah lewat -> tolak.
+    // Entri lama tanpa expires_at dibiarkan (grandfathered) agar tak mengunci pembeli lama.
+    const entry = (list.entries || []).find((e) => e.serial === needle);
+    if (entry && entry.expires_at) {
+      const exp = new Date(entry.expires_at).getTime();
+      if (Number.isFinite(exp) && Date.now() > exp) {
+        throw Object.assign(new Error('Masa aktif lisensi sudah berakhir. Beli paket baru untuk melanjutkan.'), { status: 403, code: 'LICENSE_EXPIRED' });
+      }
+    }
     return { trial: false, listed: list.licenses.has(needle) };
   }
   return { trial: false, listed: true };

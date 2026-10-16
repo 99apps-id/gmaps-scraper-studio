@@ -10,6 +10,7 @@ import { fileURLToPath } from 'url';
 import ExcelJS from 'exceljs';
 import { exportToExcel } from './lib/excel.js';
 import { CATEGORY_SECTORS, REGION_CLUSTERS } from './lib/catalog.js';
+import { buildRegionIndex, resolveRegion } from './lib/region.js';
 import { getLicenseStatus, markOnboarded, activateLicenseOnline, validateSerial, loadLicenseState, deactivateLicense } from './lib/license.js';
 import { executeScrapePlan, provinceForCity } from './lib/scrape-runner.js';
 import { WEBHOOK_PATH, CLAIM_PATH, PLANS, verifySingapaySignature, 
@@ -29,6 +30,9 @@ orderReuseStatus, fetchVpsOrderByReff } from './lib/payment.js';
 const ENGINE_MODE = (process.env.ENGINE_MODE || 'local').toLowerCase();
 const ENGINE_URL = (process.env.ENGINE_URL || '').replace(/\/+$/, '');
 const ENGINE_ALLOWLIST_FILE = process.env.ENGINE_ALLOWLIST_FILE || null;
+
+// Indeks wilayah (kota + kecamatan -> kota/provinsi induk) untuk anchor query.
+const REGION_INDEX = buildRegionIndex(REGION_CLUSTERS.flatMap((cl) => cl.cities));
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -287,41 +291,44 @@ function generateQueriesForCity(city, keyword, withProximity = true, opts = {}) 
     }
   };
 
-  // Cari matching city data di REGION_CLUSTERS
-  let matchedCity = null;
-  const cLower = cleanCity.toLowerCase();
-  for (const cluster of REGION_CLUSTERS) {
-    for (const c of cluster.cities) {
-      if (c.name.toLowerCase() === cLower || cLower.includes(c.name.toLowerCase())) {
-        matchedCity = c;
-        break;
-      }
-    }
-    if (matchedCity) break;
+  // Resolusi wilayah: kecamatan/desa -> kota + provinsi induk.
+  // Contoh: "Bojonggede" -> kota "Kabupaten Bogor", provinsi "Jawa Barat".
+  const resolved = resolveRegion(cleanCity, REGION_INDEX);
+  const isDistrict = Boolean(resolved.district);
+  const searchCity = resolved.city || cleanCity;
+  const place = isDistrict ? `${cleanCity} ${searchCity}` : searchCity;
+  const regionSuffix = resolved.province ? ` ${resolved.province}` : '';
+  const cLower = searchCity.toLowerCase();
+  const subs = (!isDistrict && resolved.cityEntry && Array.isArray(resolved.cityEntry.subDistricts))
+    ? resolved.cityEntry.subDistricts.filter(Boolean)
+    : [];
+
+  // Layer 1: base queries di-anchor ke kota + provinsi (cegah lintas wilayah).
+  push(`${primaryKw} ${place}${regionSuffix}`);
+  push(`${primaryKw} ${place}`);
+  if (!isDistrict) {
+    push(`${primaryKw} ${place} kota`);
+    push(`${primaryKw} ${place} pusat`);
+    push(`${primaryKw} terbaik ${place}`);
+  } else {
+    push(`${primaryKw} di ${cleanCity} ${resolved.province}`);
   }
-  const subs = (matchedCity && Array.isArray(matchedCity.subDistricts) ? matchedCity.subDistricts : []).filter(Boolean);
 
-  // Layer 1: base city queries
-  push(`${primaryKw} ${cleanCity}`);
-  push(`${primaryKw} ${cleanCity} kota`);
-  push(`${primaryKw} ${cleanCity} pusat`);
-  push(`${primaryKw} terbaik ${cleanCity}`);
-
-  // Layer 2: FULL sub-district coverage (was: only first 10)
+  // Layer 2: cakupan kecamatan (hanya saat input berupa kota yang dikenali)
   if (subs.length > 0) {
     for (const sub of subs) {
-      push(`${primaryKw} ${sub} ${cleanCity}`);
+      push(`${primaryKw} ${sub} ${searchCity}`);
       push(`${primaryKw} ${sub}`);
     }
-  } else {
+  } else if (resolved.city) {
     for (const dir of ['selatan', 'barat', 'timur', 'utara', 'pusat']) {
-      push(`${primaryKw} ${cleanCity} ${dir}`);
+      push(`${primaryKw} ${searchCity} ${dir}`);
     }
   }
 
   // Layer 3: qualifier variants at city level
   for (const q of DEEP_QUALIFIERS) {
-    push(`${primaryKw} ${q} ${cleanCity}`);
+    push(`${primaryKw} ${q} ${place}`);
   }
   // Layer 3b: segment variants for lodging-type keywords
   // (dilewati bila keyword sudah mengandung segmen — cegah "kost putra putra")
@@ -329,7 +336,7 @@ function generateQueriesForCity(city, keyword, withProximity = true, opts = {}) 
   const hasSegment = KOST_SEGMENTS.some((seg) => kwLower.includes(seg));
   if (isKostLike(primaryKw) && !hasSegment) {
     for (const seg of KOST_SEGMENTS) {
-      push(`${primaryKw} ${seg} ${cleanCity}`);
+      push(`${primaryKw} ${seg} ${place}`);
     }
     // Segment x top sub-districts (cheap deepening, max 6)
     for (const sub of subs.slice(0, 3)) {
@@ -340,9 +347,9 @@ function generateQueriesForCity(city, keyword, withProximity = true, opts = {}) 
 
   // Layer 4: keyword-variant expansion (synonyms from catalog category)
   for (const v of variants) {
-    push(`${v} ${cleanCity}`);
+    push(`${v} ${place}`);
     for (const sub of subs.slice(0, 3)) {
-      push(`${v} ${sub} ${cleanCity}`);
+      push(`${v} ${sub} ${place}`);
     }
   }
 
@@ -361,12 +368,12 @@ function generateQueriesForCity(city, keyword, withProximity = true, opts = {}) 
   }
 
   if (withProximity) {
-    push(`${primaryKw} dekat kampus di ${cleanCity}`);
-    push(`${primaryKw} dekat universitas ${cleanCity}`);
-    push(`${primaryKw} dekat perkantoran ${cleanCity}`);
-    push(`${primaryKw} dekat pusat bisnis ${cleanCity}`);
-    push(`${primaryKw} dekat stasiun ${cleanCity}`);
-    push(`${primaryKw} dekat pusat kota ${cleanCity}`);
+    push(`${primaryKw} dekat kampus di ${place}`);
+    push(`${primaryKw} dekat universitas ${place}`);
+    push(`${primaryKw} dekat perkantoran ${place}`);
+    push(`${primaryKw} dekat pusat bisnis ${place}`);
+    push(`${primaryKw} dekat stasiun ${place}`);
+    push(`${primaryKw} dekat pusat kota ${place}`);
 
     // Query spesifik landmark populer jika kota dikenali
     if (cLower.includes('jakarta')) {
@@ -679,7 +686,7 @@ async function proxyToEngine(pathname, req, res) {
 }
 
 // 5. HTTP SERVER
-const server = http.createServer(async (req, res) => {
+async function handleRequest(req, res) {
   setSecurityHeaders(res);
   let urlObj;
   try {
@@ -742,6 +749,19 @@ const server = http.createServer(async (req, res) => {
   if (pathname === '/api/catalog' && req.method === 'GET') {
     res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
     res.end(JSON.stringify({ sectors: CATEGORY_SECTORS, regions: REGION_CLUSTERS }));
+    return;
+  }
+
+  // RESOLVE WILAYAH (kota/kecamatan -> kota + provinsi induk) untuk pratinjau UI.
+  if (pathname === '/api/region/resolve' && req.method === 'GET') {
+    if (ENGINE_MODE === 'client') {
+      const proxied = await proxyToEngine(pathname, req, res);
+      if (proxied) return;
+    }
+    const q = String(urlObj.searchParams.get('q') || '').trim();
+    const r = resolveRegion(q, REGION_INDEX);
+    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'public, max-age=600' });
+    res.end(JSON.stringify({ input: q, city: r.city, province: r.province, district: r.district, known: r.known }));
     return;
   }
 
@@ -821,9 +841,16 @@ const server = http.createServer(async (req, res) => {
       const payload = await readJsonBody(req);
       const reff = String(payload?.reff || '').trim();
       const since = String(payload?.since || '').trim();
+      // Keamanan: serial hanya diberikan bila pemanggil menyertakan nomor
+      // referensi miliknya (bukti kepemilikan). Fallback "since" dulu
+      // membocorkan serial pembayar terbaru ke siapa pun yang memanggil.
+      if (!reff && since) {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ found: false, message: 'Aktivasi otomatis butuh nomor referensi pembayaran. Masukkan nomor referensi Anda.' }));
+        return;
+      }
       let order = null;
       if (reff) order = claimByReff(reff);
-      else if (since) order = findLatestOrderAfter(since);
       // Klien tak menerima webhook: butir reff dicarikan ke VPS (klaim).
       if (!order?.serial && reff && ENGINE_MODE === 'client') {
         const remote = await fetchVpsOrderByReff(reff).catch(() => null);
@@ -836,7 +863,7 @@ const server = http.createServer(async (req, res) => {
       }
       const reuse = orderReuseStatus(reff);
       if (reuse.found && reuse.stillActive) {
-        const baseTime = reuse.created_at ? new Date(reuse.created_at) : new Date();
+        const baseTime = reuse.activatedAt ? new Date(reuse.activatedAt) : new Date();
         const planOpts = { plan: order.plan || 'berbayar', durationDays: order.days || 1 };
         const activateRes = await activateLicenseOnline(order.serial, baseTime, planOpts);
         res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -920,8 +947,9 @@ const server = http.createServer(async (req, res) => {
       const reff = tokenData?.reffNo || (token ? token : null);
       const rec = reff ? claimByReff(reff) : null;
       const isOk = action === 'success';
+      const escHtml = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
       const html = isOk
-        ? `<!DOCTYPE html><html lang="id"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Pembayaran Berhasil</title><style>body{font-family:system-ui,sans-serif;background:#f8fafc;color:#0f172a;display:flex;justify-content:center;padding:2rem 1rem}main{background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:1.5rem;max-width:460px;width:100%}button{background:#0f172a;color:#fff;border:none;border-radius:8px;padding:.6rem 1rem;font-weight:700;cursor:pointer;margin-top:1rem}.missing{color:#be123c}</style></head><body><main><h1>Pembayaran Berhasil</h1>${rec ? `<p>Paket <b>${rec.plan}</b> (${rec.days} hari).</p><p>Kode aktivasi: <b>${rec.serial}</b></p><p>Salin kode ini ke aplikasi untuk mengaktifkan lisensi.</p>` : '<p>Pembayaran diterima.</p>'}<button onclick="window.close()">Tutup</button></main></body></html>`
+        ? `<!DOCTYPE html><html lang="id"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Pembayaran Berhasil</title><style>body{font-family:system-ui,sans-serif;background:#f8fafc;color:#0f172a;display:flex;justify-content:center;padding:2rem 1rem}main{background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:1.5rem;max-width:460px;width:100%}button{background:#0f172a;color:#fff;border:none;border-radius:8px;padding:.6rem 1rem;font-weight:700;cursor:pointer;margin-top:1rem}.missing{color:#be123c}</style></head><body><main><h1>Pembayaran Berhasil</h1>${rec ? `<p>Paket <b>${escHtml(rec.plan)}</b> (${Number(rec.days) || 0} hari).</p><p>Kode aktivasi: <b>${escHtml(rec.serial)}</b></p><p>Salin kode ini ke aplikasi untuk mengaktifkan lisensi.</p>` : '<p>Pembayaran diterima.</p>'}<button onclick="window.close()">Tutup</button></main></body></html>`
         : `<!DOCTYPE html><html lang="id"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Pembayaran Kadaluarsa</title><style>body{font-family:system-ui,sans-serif;background:#f8fafc;color:#0f172a;display:flex;justify-content:center;padding:2rem 1rem}main{background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:1.5rem;max-width:460px;width:100%}a{color:#2563eb}button{background:#0f172a;color:#fff;border:none;border-radius:8px;padding:.6rem 1rem;font-weight:700;cursor:pointer;margin-top:1rem}</style></head><body><main><h1>Link Kadaluarsa</h1><p>Silakan buka kembali aplikasi untuk membuat tautan pembayaran baru.</p><a href="/">Buka aplikasi</a></main></body></html>`;
       res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
       res.end(html);
@@ -1409,7 +1437,14 @@ const server = http.createServer(async (req, res) => {
     }
   }
 
-  const decodedPath = decodeURIComponent(pathname);
+  let decodedPath;
+  try {
+    decodedPath = decodeURIComponent(pathname);
+  } catch {
+    res.writeHead(400, { 'Content-Type': 'text/plain' });
+    res.end('Bad Request');
+    return;
+  }
   let filePath = path.normalize(path.join(PUBLIC_DIR, decodedPath === '/' ? 'index.html' : decodedPath));
   if (!filePath.startsWith(PUBLIC_DIR + path.sep) && filePath !== PUBLIC_DIR) {
     res.writeHead(403);
@@ -1441,7 +1476,26 @@ const server = http.createServer(async (req, res) => {
     res.writeHead(404, { 'Content-Type': 'text/plain' });
     res.end('Not Found');
   }
+}
+
+// Bungkus handler: setiap error (termasuk URLError dari decodeURIComponent
+// atau fetch yang gagal) dijawab 500, bukan menjatuhkan proses (DoS).
+const server = http.createServer((req, res) => {
+  handleRequest(req, res).catch((err) => {
+    console.error('[server] galat tak tertangani:', err?.message || err);
+    try {
+      if (!res.headersSent) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Kesalahan internal' }));
+      } else {
+        res.end();
+      }
+    } catch { /* koneksi sudah putus */ }
+  });
 });
+
+process.on('unhandledRejection', (err) => console.error('[server] unhandledRejection:', err?.message || err));
+process.on('uncaughtException', (err) => console.error('[server] uncaughtException:', err?.message || err));
 
 // START SERVER
 initDataset()

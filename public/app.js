@@ -658,6 +658,24 @@ const sectorContainer = document.getElementById('sectorContainer');
 const clusterContainer = document.getElementById('clusterContainer');
 const customKeywordInput = document.getElementById('customKeywordInput');
 const customCitiesInput = document.getElementById('customCitiesInput');
+// Pratinjau resolusi wilayah (kota/kecamatan) via engine.
+let cityPreviewTimer = null;
+const resolveCityPreview = async () => {
+  const box = document.getElementById('cityPreview');
+  if (!box) return;
+  const parts = (customCitiesInput.value || '').split(',').map((s) => s.trim()).filter((s) => s.length >= 2);
+  if (!parts.length) { box.textContent = ''; return; }
+  try {
+    const data = await Promise.all(parts.slice(0, 6).map((p) => fetch('/api/region/resolve?q=' + encodeURIComponent(p)).then((r) => r.json()).catch(() => null)));
+    const lines = data.map((d) => {
+      if (!d || !d.known) return null;
+      const bits = [d.city, d.province].filter(Boolean).join(', ');
+      return d.district ? `${d.district} → ${bits}` : bits;
+    }).filter(Boolean);
+    box.textContent = lines.length ? `Terbaca: ${lines.join(' · ')}` : '';
+  } catch { box.textContent = ''; }
+};
+customCitiesInput.addEventListener('input', () => { clearTimeout(cityPreviewTimer); cityPreviewTimer = setTimeout(resolveCityPreview, 450); });
 const studioDepthSelect = document.getElementById('studioDepthSelect');
 const studioProximityCheck = document.getElementById('studioProximityCheck');
 const studioDeepMatrixCheck = document.getElementById('studioDeepMatrixCheck');
